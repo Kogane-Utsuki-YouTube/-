@@ -3,13 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>方向重力スイカゲーム</title>
+<title>方向重力スイカゲーム (チート版)</title>
 <style>
   :root{
     --bg1:#1a1a2e;
     --bg2:#16213e;
     --panel:#0f3460;
     --accent:#e94560;
+    --cheat:#ffd700;
     --text:#f1f1f1;
   }
   *{box-sizing:border-box;}
@@ -72,13 +73,6 @@
     filter:drop-shadow(0 0 4px rgba(233,69,96,.9));
     transition:transform .12s linear;
   }
-  #gravityLabel{
-    position:absolute;
-    bottom:-20px;
-    font-size:11px;
-    white-space:nowrap;
-    color:#ccc;
-  }
   #canvasWrap{
     position:relative;
     border-radius:12px;
@@ -116,6 +110,13 @@
     letter-spacing:1px;
   }
   button:hover{filter:brightness(1.1);}
+  .cheat-mode-btn{
+    background:#e67e22;
+  }
+  .cheat-active{
+    background:var(--cheat) !important;
+    color:#000 !important;
+  }
   #help{
     margin-top:8px;
     font-size:12px;
@@ -125,16 +126,7 @@
     max-width:480px;
   }
   #help b{color:var(--accent);}
-  #nextPreview{
-    display:flex;
-    align-items:center;
-    gap:6px;
-  }
-  #nextCircle{
-    width:26px;height:26px;
-    border-radius:50%;
-    border:2px solid #fff;
-  }
+  #help b.cheat-text{color:var(--cheat);}
   .touchhint{display:none;}
   @media (max-width:520px){
     .touchhint{display:block;font-size:11px;color:#888;margin-top:4px;}
@@ -151,6 +143,7 @@
     <div class="item">重力強度: <span id="gravVal">1.0</span></div>
     <div class="item">角度: <span id="gravAngleVal">90°</span></div>
     <button id="shuffleBtn" style="padding:4px 12px;font-size:13px;">🔄 かき混ぜ (<span id="shuffleTimer">OK</span>)</button>
+    <button id="cheatBtn" class="cheat-mode-btn" style="padding:4px 12px;font-size:13px;">⚡ チート: OFF</button>
     <div id="gravityIndicator">
       <div id="arrow"></div>
     </div>
@@ -164,9 +157,8 @@
     </div>
   </div>
   <div id="help">
-    <b>←→</b>：重力の向きを回転　<b>↑↓</b>：重力の強さを変更　<b>クリック/タップ/移動</b>：フルーツを落とす<br>
-    同じ大きさのフルーツをぶつけて合体させよう。11(スイカ)が2つ結合すると消えて特大スコア
-    <div class="touchhint">スマホの場合は画面下の左右ボタンで重力方向、上下ボタンで強度を調整できます。</div>
+    <b>←→</b>：回転 <b>↑↓</b>：強度 <b>クリック/タップ</b>：落とす<br>
+    <b class="cheat-text">⚡ チートモード</b>：ONの時、フルーツを2つ連続タップで強制合体！
   </div>
 </div>
 
@@ -178,7 +170,6 @@
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
-// 論理サイズ(内部解像度)
 const LOGICAL_W = 480;
 const LOGICAL_H = 640;
 let SCALE = 1;
@@ -195,7 +186,6 @@ window.addEventListener('resize', resize);
 resize();
 
 /* ================= フルーツ定義 (1〜11) ================= */
-// レベル1〜11。半径は段階的に増加。11同士が合体したら消滅してボーナス。
 const FRUITS = [
   { level:1,  radius:14, color:"#ff5e5e", score:1  , name:"さくらんぼ"},
   { level:2,  radius:19, color:"#ff9f43", score:3  , name:"いちご"},
@@ -210,34 +200,29 @@ const FRUITS = [
   { level:11, radius:102,color:"#2ecc71", score:66 , name:"スイカ"},
 ];
 const MAX_LEVEL = 11;
-const MERGE_BONUS_ON_MAX = 500; // 11同士合体で消える時の特大ボーナス
+const MERGE_BONUS_ON_MAX = 500;
 
 /* ================= 重力システム ================= */
-let gravityAngle = -Math.PI/2; // ラジアン。初期は真上→下向き(通常重力=下方向=角度 PI/2)
-// 角度の定義: 0 = 右方向, PI/2 = 下方向, PI = 左方向, -PI/2 = 上方向
-gravityAngle = Math.PI/2; // 初期状態は通常の重力(下向き)
-let gravityStrength = 800.0; // 元exeと同じ単位(px/s^2)
-const ANGLE_STEP = Math.PI/180; // 左右キー1回の回転量(1度)
-const STRENGTH_STEP = 20; // 0.1相当の細かさ(元exeは100刻み→1/5に細分化)
+let gravityAngle = Math.PI/2;
+let gravityStrength = 800.0;
+const ANGLE_STEP = Math.PI/180;
+const STRENGTH_STEP = 20;
 const STRENGTH_MIN = 100.0;
 const STRENGTH_MAX = 2400.0;
 
 function updateGravityIndicator(){
   const arrow = document.getElementById('arrow');
-  // arrowはデフォルトで下向きの三角形なので、回転角度は gravityAngle - (下向き=PI/2) 分ずらす
-  const deg = (gravityAngle * 180/Math.PI) - 90 + 180; // 三角形の先端が重力方向を向くよう調整
   arrow.style.transform = `rotate(${(gravityAngle*180/Math.PI)-90}deg)`;
   document.getElementById('gravVal').textContent = Math.round(gravityStrength);
   const angDeg = document.getElementById('gravAngleVal');
   if (angDeg) angDeg.textContent = Math.round(((gravityAngle*180/Math.PI)%360+360)%360) + "°";
 }
 
-/* ================= 物理エンジン(簡易) ================= */
+/* ================= 物理エンジン ================= */
 const WALL_THICKNESS = 14;
-const FLOOR_Y = LOGICAL_H - WALL_THICKNESS - 10;
 const LEFT_X = WALL_THICKNESS + 10;
 const RIGHT_X = LOGICAL_W - WALL_THICKNESS - 10;
-const TOP_LIMIT_Y = 90; // ここより上に積み上がったらゲームオーバー判定ライン
+const TOP_LIMIT_Y = 90;
 
 let balls = [];
 let idCounter = 1;
@@ -247,11 +232,27 @@ document.getElementById('best').textContent = best;
 
 let gameOver = false;
 let dropCooldown = 0;
-const DROP_COOLDOWN_MAX = 0.65; // 元exeのDROP_COOLDOWNと同じ
-let isDropping = false; // 元exeのg_dropping相当
+const DROP_COOLDOWN_MAX = 0.65;
+let isDropping = false;
+
+/* ================= チート機能の変数 ================= */
+let cheatEnabled = false;
+let selectedBall = null;
+
+const cheatBtn = document.getElementById('cheatBtn');
+cheatBtn.addEventListener('click', () => {
+  cheatEnabled = !cheatEnabled;
+  if (cheatEnabled) {
+    cheatBtn.textContent = "⚡ チート: ON";
+    cheatBtn.classList.add('cheat-active');
+  } else {
+    cheatBtn.textContent = "⚡ チート: OFF";
+    cheatBtn.classList.remove('cheat-active');
+    selectedBall = null;
+  }
+});
 
 function randomDropLevel(){
-  // 序盤(1〜5)からランダムに出す
   const r = Math.random();
   if (r < 0.35) return 1;
   if (r < 0.6) return 2;
@@ -283,10 +284,8 @@ function createBall(x, y, level){
   };
 }
 
-/* 落下位置カーソル(重力方向に応じて画面端から投入) */
-
-const DROP_Y_FIXED = TOP_LIMIT_Y - 45; // 元exeのDROP_Y = BOARD_Y+35相当、常に固定
-let cursorX = LOGICAL_W/2; // 元exeのg_cursorX相当。マウス/タッチ/矢印キーで動く水平カーソル
+const DROP_Y_FIXED = TOP_LIMIT_Y - 45;
+let cursorX = LOGICAL_W/2;
 function getDropSpawnInfo(){
   const r = FRUITS[nextLevel-1].radius;
   const cx = Math.min(Math.max(cursorX, LEFT_X+r), RIGHT_X-r);
@@ -309,6 +308,12 @@ function dropBall(){
 let pendingMerges = [];
 let popEffects = [];
 
+function forceMerge(a, b){
+  a.merging = true;
+  b.merging = true;
+  pendingMerges.push({a, b, forced: true});
+}
+
 function tryMerge(a, b){
   if (a.level !== b.level) return false;
   if (a.merging || b.merging) return false;
@@ -324,16 +329,19 @@ function tryMerge(a, b){
 
 function processMerges(){
   for (const m of pendingMerges){
-    const {a,b} = m;
+    const {a,b,forced} = m;
     if (!balls.includes(a) || !balls.includes(b)) continue;
     const mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
-    if (a.level >= MAX_LEVEL){
-      // 11同士 → 消滅
+    
+    // チートで強制合体の場合は、2つのうちレベルの高い方をベースに+1する
+    const targetLevel = forced ? Math.max(a.level, b.level) : a.level;
+
+    if (targetLevel >= MAX_LEVEL){
       balls = balls.filter(x=>x!==a && x!==b);
       score += MERGE_BONUS_ON_MAX;
       popEffects.push({x:mx,y:my,r:a.r*1.4,life:0.5,maxLife:0.5,color:"#2ecc71"});
     } else {
-      const newLevel = a.level+1;
+      const newLevel = targetLevel + 1;
       balls = balls.filter(x=>x!==a && x!==b);
       const nb = createBall(mx,my,newLevel);
       nb.justDropped = false;
@@ -355,13 +363,12 @@ function updateScoreUI(){
   }
 }
 
-/* ================= ゲームオーバー判定(元exeと同じロジック) ================= */
-// 元exe: if (!g_dropping) { for each fruit: if (f.y - r < BOARD_Y+10) gameOver=true; }
+/* ================= ゲームオーバー判定 ================= */
 const GAME_OVER_LINE_Y = TOP_LIMIT_Y + 10;
 function checkGameOver(dt){
-  if (isDropping) return; // ドロップ直後のフルーツで誤判定しないよう、元exeと同じくドロップ中はスキップ
-  if (isShuffling) return; // シャッフル演出中はゲームオーバー判定を一時停止
-  if (gameOverGraceLeft > 0) return; // シャッフル直後5秒間もゲームオーバー判定を無効化
+  if (isDropping) return;
+  if (isShuffling) return;
+  if (gameOverGraceLeft > 0) return;
   for (const b of balls){
     if (b.y - b.r < GAME_OVER_LINE_Y){
       triggerGameOver();
@@ -384,6 +391,7 @@ function resetGame(){
   isDropping = false;
   dropCooldown = 0;
   cursorX = LOGICAL_W/2;
+  selectedBall = null;
   updateScoreUI();
   document.getElementById('gameOverOverlay').style.display = 'none';
   nextLevel = randomDropLevel();
@@ -424,6 +432,9 @@ window.addEventListener('keydown', (e)=>{
       if (gameOver) resetGame(); else dropBall();
       e.preventDefault();
       break;
+    case 'Escape':
+      selectedBall = null;
+      break;
     case 'r': case 'R':
       resetGame();
       e.preventDefault();
@@ -431,41 +442,80 @@ window.addEventListener('keydown', (e)=>{
   }
 });
 
-/* ================= 入力: マウス/タッチ ================= */
+/* ================= クリック/タップによる判定処理 ================= */
+function getBallAt(lx, ly){
+  for (let i = balls.length - 1; i >= 0; i--){
+    const b = balls[i];
+    const dist = Math.hypot(b.x - lx, b.y - ly);
+    if (dist <= b.r) return b;
+  }
+  return null;
+}
+
+function handlePointerDown(lx, ly){
+  if (gameOver){ resetGame(); return; }
+
+  // チートモード有効時の処理
+  if (cheatEnabled){
+    const clickedBall = getBallAt(lx, ly);
+    if (clickedBall){
+      if (!selectedBall){
+        // 1つ目の選択
+        selectedBall = clickedBall;
+      } else if (selectedBall === clickedBall){
+        // 同じものをタップしたら解除
+        selectedBall = null;
+      } else {
+        // 2つ目を選択して強制合体
+        forceMerge(selectedBall, clickedBall);
+        selectedBall = null;
+      }
+      return;
+    } else {
+      // フルーツ以外の場所をクリックで選択解除
+      selectedBall = null;
+    }
+  }
+
+  // 通常のドロップ処理
+  cursorX = lx;
+  dropBall();
+}
+
 canvas.addEventListener('mousemove', (e)=>{
   if (isDropping || gameOver) return;
   const rect = canvas.getBoundingClientRect();
-  const lx = (e.clientX-rect.left)/SCALE;
-  cursorX = lx;
+  cursorX = (e.clientX-rect.left)/SCALE;
 });
+
 canvas.addEventListener('click', (e)=>{
-  if (gameOver){ resetGame(); return; }
   const rect = canvas.getBoundingClientRect();
   const lx = (e.clientX-rect.left)/SCALE;
-  cursorX = lx;
-  dropBall();
+  const ly = (e.clientY-rect.top)/SCALE;
+  handlePointerDown(lx, ly);
 });
+
 canvas.addEventListener('touchstart', (e)=>{
   const rect = canvas.getBoundingClientRect();
   const t = e.touches[0];
   const lx = (t.clientX-rect.left)/SCALE;
-  cursorX = lx;
-  dropBall();
+  const ly = (t.clientY-rect.top)/SCALE;
+  handlePointerDown(lx, ly);
   e.preventDefault();
 }, {passive:false});
 
 updateGravityIndicator();
 
-/* ================= シャッフル機能(ボタンで発動、使用後60秒クールダウン、終了後5秒間ゲームオーバー無効) ================= */
-const SHUFFLE_COOLDOWN = 60; // 秒、使用後の再使用可能までの時間
-let shuffleCooldownLeft = 0; // 0ならボタン使用可能
+/* ================= シャッフル機能 ================= */
+const SHUFFLE_COOLDOWN = 60;
+let shuffleCooldownLeft = 0;
 let isShuffling = false;
 let shuffleStartAngle = 0;
 let shuffleStartStrength = 800;
 let shuffleElapsed = 0;
-const SHUFFLE_DURATION = 4.0; // 秒、派手な回転演出の時間(ゆっくり目で見えるように)
-const SHUFFLE_SPINS = 3; // 演出中の回転数
-let gameOverGraceLeft = 0; // >0の間はゲームオーバー判定を無効化
+const SHUFFLE_DURATION = 4.0;
+const SHUFFLE_SPINS = 3;
+let gameOverGraceLeft = 0;
 
 function doShuffle(){
   if (isShuffling || shuffleCooldownLeft > 0) return;
@@ -481,16 +531,14 @@ function updateShuffle(dt){
   if (isShuffling){
     shuffleElapsed += dt;
     const t = Math.min(shuffleElapsed / SHUFFLE_DURATION, 1);
-    // 派手な加速→減速の回転(SHUFFLE_SPINS回転して元の角度に戻る)
     const ease = t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2;
     gravityAngle = shuffleStartAngle + ease * (Math.PI*2*SHUFFLE_SPINS);
-    // 強さも演出中は激しく揺れ動かす(見た目のみ、終了後は元に戻す)
     gravityStrength = shuffleStartStrength + Math.sin(shuffleElapsed*40) * shuffleStartStrength*0.3*(1-t);
     if (t >= 1){
-      gravityAngle = ((shuffleStartAngle % (Math.PI*2)) + Math.PI*2) % (Math.PI*2); // 元の方向にきっちり戻す(正規化)
-      gravityStrength = shuffleStartStrength; // 強さも元に戻す
+      gravityAngle = ((shuffleStartAngle % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+      gravityStrength = shuffleStartStrength;
       isShuffling = false;
-      gameOverGraceLeft = 5; // 終了後5秒間はゲームオーバー判定を無効化
+      gameOverGraceLeft = 5;
     }
     updateGravityIndicator();
   }
@@ -518,14 +566,13 @@ function updateShuffleUI(){
 
 document.getElementById('shuffleBtn').addEventListener('click', doShuffle);
 
-
 /* ================= メインループ ================= */
 let lastTime = performance.now();
 
 function step(now){
   let dt = (now-lastTime)/1000;
   lastTime = now;
-  dt = Math.min(dt, 1/30); // 大きすぎるdtを防ぐ
+  dt = Math.min(dt, 1/30);
 
   if (isDropping){
     dropCooldown -= dt;
@@ -542,19 +589,17 @@ function step(now){
   requestAnimationFrame(step);
 }
 
-const SUBSTEPS = 8; // 元exeと同じサブステップ数
-const DAMPING = 0.4;   // 元exe: 底面バウンド減衰
-const FRICTION = 0.88; // 元exe: 底面横摩擦
-const WALL_BOUNCE = 0.6; // 元exe: 左右壁の反発
+const SUBSTEPS = 8;
+const DAMPING = 0.4;
+const FRICTION = 0.88;
+const WALL_BOUNCE = 0.6;
 
 function updatePhysics(dt){
   const subDt = dt / SUBSTEPS;
-  // 元exeの式そのまま: gx = strength*cos(angle - PI/2), gy = strength*sin(angle - PI/2)
   const gx = gravityStrength * Math.cos(gravityAngle);
   const gy = gravityStrength * Math.sin(gravityAngle);
 
   for (let s=0; s<SUBSTEPS; s++){
-    // 積分
     for (const b of balls){
       if (b.merging) continue;
       b.vx += gx*subDt;
@@ -563,7 +608,6 @@ function updatePhysics(dt){
       b.y  += b.vy*subDt;
     }
 
-    // 壁との衝突(元exeと同じ反発係数)
     for (const b of balls){
       if (b.merging) continue;
       const r = b.r;
@@ -577,7 +621,6 @@ function updatePhysics(dt){
       }
     }
 
-    // フルーツ同士の衝突(元exeと同じ処理: 押し離し+反発0.55、同レベルなら合体)
     const n = balls.length;
     for (let i=0;i<n;i++){
       const a = balls[i];
@@ -650,15 +693,15 @@ function render(){
 
   // 壁
   ctx.fillStyle = "#5c3a21";
-  ctx.fillRect(0,0,LOGICAL_W,WALL_THICKNESS); // 上
-  ctx.fillRect(0,LOGICAL_H-WALL_THICKNESS,LOGICAL_W,WALL_THICKNESS); // 下
-  ctx.fillRect(0,0,WALL_THICKNESS,LOGICAL_H); // 左
-  ctx.fillRect(LOGICAL_W-WALL_THICKNESS,0,WALL_THICKNESS,LOGICAL_H); // 右
+  ctx.fillRect(0,0,LOGICAL_W,WALL_THICKNESS);
+  ctx.fillRect(0,LOGICAL_H-WALL_THICKNESS,LOGICAL_W,WALL_THICKNESS);
+  ctx.fillRect(0,0,WALL_THICKNESS,LOGICAL_H);
+  ctx.fillRect(LOGICAL_W-WALL_THICKNESS,0,WALL_THICKNESS,LOGICAL_H);
 
-  // 重力方向の矢印を盤面内にも薄く表示
+  // 重力矢印
   drawFieldGravityArrow();
 
-  // 投入プレビュー位置
+  // 投入プレビュー
   if (!gameOver){
     const info = getDropSpawnInfo();
     const f = FRUITS[nextLevel-1];
@@ -702,7 +745,7 @@ function drawFieldGravityArrow(){
   ctx.moveTo(cx - dirx*len, cy - diry*len);
   ctx.lineTo(cx + dirx*len, cy + diry*len);
   ctx.stroke();
-  // 矢じり
+
   const ang = Math.atan2(diry,dirx);
   const tipX = cx+dirx*len, tipY = cy+diry*len;
   ctx.beginPath();
@@ -718,6 +761,15 @@ function drawFieldGravityArrow(){
 function drawBall(b){
   const f = FRUITS[b.level-1];
   ctx.save();
+  
+  // チートモード選択中のエフェクト描画
+  if (selectedBall === b){
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r + 6, 0, Math.PI*2);
+    ctx.fillStyle = "#ffd700";
+    ctx.fill();
+  }
+
   ctx.beginPath();
   ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
   ctx.fillStyle = f.color;
