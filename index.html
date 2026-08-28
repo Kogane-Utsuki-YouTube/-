@@ -110,6 +110,28 @@
     letter-spacing:1px;
   }
   button:hover{filter:brightness(1.1);}
+  button:disabled{opacity:0.4;cursor:not-allowed;filter:none;}
+  .touch-btn{
+    background:#1e3a5f;
+    border:1px solid rgba(255,255,255,.2);
+    border-radius:8px;
+    color:#fff;
+    font-weight:bold;
+    cursor:pointer;
+    touch-action:manipulation;
+  }
+  .touch-btn:active{background:#2e5a8f;}
+  @media (max-width:600px){
+    h1{font-size:15px;}
+    #hud{gap:6px;font-size:12px;}
+    #hud .item{padding:3px 7px;}
+    #touchControls{display:flex!important;}
+    #help{font-size:11px;}
+  }
+  @media (hover:none) and (pointer:coarse){
+    /* タッチデバイス全般 */
+    #touchControls{display:flex!important;}
+  }
   .cheat-mode-btn{
     background:#e67e22;
   }
@@ -144,6 +166,10 @@
     <div class="item">角度: <span id="gravAngleVal">90°</span></div>
     <button id="shuffleBtn" style="padding:4px 12px;font-size:13px;">🔄 かき混ぜ (<span id="shuffleTimer">OK</span>)</button>
     <button id="cheatBtn" class="cheat-mode-btn" style="padding:4px 12px;font-size:13px;">⚡ チート: OFF</button>
+    <div id="cheatNextWrap" style="display:none;align-items:center;gap:6px;background:rgba(255,215,0,.12);border:1px solid gold;border-radius:8px;padding:4px 10px;font-size:13px;">
+      次指定:
+      <select id="cheatNextSelect" style="background:#1a1a2e;color:#ffd700;border:1px solid gold;border-radius:4px;padding:2px 4px;font-size:13px;"></select>
+    </div>
     <div id="gravityIndicator">
       <div id="arrow"></div>
     </div>
@@ -155,10 +181,35 @@
       <p>スコア: <span id="finalScore">0</span></p>
       <button id="retryBtn">もう一度</button>
     </div>
+    <!-- かき混ぜ中のオーバーレイ表示 -->
+    <div id="shuffleOverlay" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;pointer-events:none;z-index:5;">
+      <div style="background:rgba(0,0,0,.55);border-radius:12px;padding:10px 22px;color:#ffd700;font-size:18px;font-weight:bold;letter-spacing:2px;">🔄 かき混ぜ中…</div>
+    </div>
+    <!-- グレース期間表示 -->
+    <div id="graceOverlay" style="position:absolute;top:8px;left:50%;transform:translateX(-50%);display:none;pointer-events:none;z-index:5;">
+      <div style="background:rgba(46,204,113,.75);border-radius:8px;padding:4px 14px;color:#fff;font-size:13px;font-weight:bold;">🛡️ 無敵 <span id="graceTimer">5</span>s</div>
+    </div>
+  </div>
+
+  <!-- スマホ用タッチコントロール -->
+  <div id="touchControls" style="display:none;flex-direction:column;align-items:center;gap:6px;margin-top:8px;width:100%;max-width:480px;">
+    <div style="display:flex;gap:8px;justify-content:center;width:100%;">
+      <button class="touch-btn" id="tLeft"  style="flex:1;padding:10px 0;font-size:18px;">◀ 重力←</button>
+      <button class="touch-btn" id="tRight" style="flex:1;padding:10px 0;font-size:18px;">重力→ ▶</button>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:center;width:100%;">
+      <button class="touch-btn" id="tUp"   style="flex:1;padding:8px 0;font-size:14px;">▲ 強度+</button>
+      <button class="touch-btn" id="tDown" style="flex:1;padding:8px 0;font-size:14px;">▼ 強度−</button>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:10px;align-items:center;margin-top:6px;flex-wrap:wrap;justify-content:center;">
+    <button id="resetBestBtn" style="background:#555;padding:4px 12px;font-size:12px;">🗑️ 記録リセット</button>
   </div>
   <div id="help">
-    <b>←→</b>：回転 <b>↑↓</b>：強度 <b>クリック/タップ</b>：落とす<br>
-    <b class="cheat-text">⚡ チートモード</b>：ONの時、フルーツを2つ連続タップで強制合体！
+    <b>←→</b>：重力回転 <b>↑↓</b>：強度 <b>クリック/タップ</b>：落とす<br>
+    <b class="cheat-text">⚡ チート</b>：ON時 ①フルーツを2つタップで強制合体 ②「次指定」で落とすフルーツを固定<br>
+    <b>🔄 かき混ぜ</b>：使用後60秒クールダウン ｜ <b>🗑️ 記録リセット</b>：2段階確認あり
   </div>
 </div>
 
@@ -175,11 +226,13 @@ const LOGICAL_H = 640;
 let SCALE = 1;
 
 function resize(){
-  const maxW = Math.min(window.innerWidth - 20, 480);
-  const maxH = window.innerHeight - 220;
+  const hudH = document.getElementById('hud').getBoundingClientRect().height || 80;
+  const touchH = window.innerWidth <= 600 ? 100 : 0;
+  const maxW = Math.min(window.innerWidth - 16, 480);
+  const maxH = window.innerHeight - hudH - touchH - 60;
   const scale = Math.min(maxW / LOGICAL_W, maxH / LOGICAL_H, 1.15);
-  SCALE = Math.max(scale, 0.5);
-  canvas.width = LOGICAL_W * SCALE;
+  SCALE = Math.max(scale, 0.38);
+  canvas.width  = LOGICAL_W * SCALE;
   canvas.height = LOGICAL_H * SCALE;
 }
 window.addEventListener('resize', resize);
@@ -240,14 +293,46 @@ let cheatEnabled = false;
 let selectedBall = null;
 
 const cheatBtn = document.getElementById('cheatBtn');
+const cheatNextWrap = document.getElementById('cheatNextWrap');
+const cheatNextSelect = document.getElementById('cheatNextSelect');
+
+// 次指定セレクトの選択肢を生成
+FRUITS.forEach(f => {
+  const opt = document.createElement('option');
+  opt.value = f.level;
+  opt.textContent = `${f.level}: ${f.name}`;
+  cheatNextSelect.appendChild(opt);
+});
+// 「ランダム」を先頭に追加
+const randOpt = document.createElement('option');
+randOpt.value = 0;
+randOpt.textContent = '0: ランダム';
+cheatNextSelect.insertBefore(randOpt, cheatNextSelect.firstChild);
+cheatNextSelect.value = 0;
+
+// セレクト変更時に即反映
+cheatNextSelect.addEventListener('change', () => {
+  const v = parseInt(cheatNextSelect.value);
+  if (v >= 1 && v <= MAX_LEVEL){
+    nextLevel = v;
+    refreshNextPreview();
+  } else {
+    nextLevel = randomDropLevel();
+    refreshNextPreview();
+  }
+});
+
 cheatBtn.addEventListener('click', () => {
   cheatEnabled = !cheatEnabled;
   if (cheatEnabled) {
     cheatBtn.textContent = "⚡ チート: ON";
     cheatBtn.classList.add('cheat-active');
+    cheatNextWrap.style.display = 'flex';
   } else {
     cheatBtn.textContent = "⚡ チート: OFF";
     cheatBtn.classList.remove('cheat-active');
+    cheatNextWrap.style.display = 'none';
+    cheatNextSelect.value = 0;
     selectedBall = null;
   }
 });
@@ -300,7 +385,13 @@ function dropBall(){
   balls.push(b);
   dropCooldown = DROP_COOLDOWN_MAX;
   isDropping = true;
-  nextLevel = randomDropLevel();
+  // チートで次指定中ならそのレベルをキープ、そうでなければランダム
+  const cheatVal = cheatEnabled ? parseInt(cheatNextSelect.value) : 0;
+  if (cheatVal >= 1 && cheatVal <= MAX_LEVEL){
+    nextLevel = cheatVal;
+  } else {
+    nextLevel = randomDropLevel();
+  }
   refreshNextPreview();
 }
 
@@ -506,7 +597,70 @@ canvas.addEventListener('touchstart', (e)=>{
 
 updateGravityIndicator();
 
-/* ================= シャッフル機能 ================= */
+/* ================= 記録リセット(2段階警告) ================= */
+let resetBestStage = 0;
+let resetBestTimer = null;
+const resetBestBtn = document.getElementById('resetBestBtn');
+resetBestBtn.addEventListener('click', () => {
+  if (resetBestStage === 0){
+    resetBestStage = 1;
+    resetBestBtn.textContent = '⚠️ 本当にリセット？';
+    resetBestBtn.style.background = '#e67e22';
+    resetBestTimer = setTimeout(() => {
+      resetBestStage = 0;
+      resetBestBtn.textContent = '🗑️ 記録リセット';
+      resetBestBtn.style.background = '#555';
+    }, 4000);
+  } else {
+    clearTimeout(resetBestTimer);
+    resetBestStage = 0;
+    best = 0;
+    localStorage.removeItem('suika_best_gravity');
+    document.getElementById('best').textContent = 0;
+    resetBestBtn.textContent = '✅ リセット完了';
+    resetBestBtn.style.background = '#27ae60';
+    setTimeout(() => {
+      resetBestBtn.textContent = '🗑️ 記録リセット';
+      resetBestBtn.style.background = '#555';
+    }, 2000);
+  }
+});
+
+/* ================= スマホ用タッチボタン ================= */
+function setupTouchBtn(id, action){
+  const el = document.getElementById(id);
+  if (!el) return;
+  let interval = null;
+  const start = (e) => { e.preventDefault(); action(); interval = setInterval(action, 80); };
+  const stop  = (e) => { if(e) e.preventDefault(); clearInterval(interval); interval = null; };
+  el.addEventListener('touchstart', start, {passive:false});
+  el.addEventListener('touchend',   stop,  {passive:false});
+  el.addEventListener('mousedown', start);
+  el.addEventListener('mouseup',   stop);
+  el.addEventListener('mouseleave',stop);
+}
+setupTouchBtn('tLeft',  () => { gravityAngle -= ANGLE_STEP * 5; updateGravityIndicator(); });
+setupTouchBtn('tRight', () => { gravityAngle += ANGLE_STEP * 5; updateGravityIndicator(); });
+setupTouchBtn('tUp',    () => { gravityStrength = Math.min(STRENGTH_MAX, gravityStrength + STRENGTH_STEP); updateGravityIndicator(); });
+setupTouchBtn('tDown',  () => { gravityStrength = Math.max(STRENGTH_MIN, gravityStrength - STRENGTH_STEP); updateGravityIndicator(); });
+
+/* ================= グレース期間UI更新 ================= */
+function updateGraceUI(){
+  const graceEl   = document.getElementById('graceOverlay');
+  const timerEl   = document.getElementById('graceTimer');
+  const shuffleEl = document.getElementById('shuffleOverlay');
+  if (isShuffling){
+    if (graceEl)   graceEl.style.display   = 'none';
+    if (shuffleEl) shuffleEl.style.display = 'flex';
+  } else if (gameOverGraceLeft > 0){
+    if (shuffleEl) shuffleEl.style.display = 'none';
+    if (graceEl)   graceEl.style.display   = 'flex';
+    if (timerEl)   timerEl.textContent     = Math.ceil(gameOverGraceLeft);
+  } else {
+    if (shuffleEl) shuffleEl.style.display = 'none';
+    if (graceEl)   graceEl.style.display   = 'none';
+  }
+}
 const SHUFFLE_COOLDOWN = 60;
 let shuffleCooldownLeft = 0;
 let isShuffling = false;
@@ -585,6 +739,7 @@ function step(now){
     updateShuffle(dt);
   }
   updatePopEffects(dt);
+  updateGraceUI();
   render();
   requestAnimationFrame(step);
 }
