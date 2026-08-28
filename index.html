@@ -28,30 +28,53 @@
     flex-direction:column;
     align-items:center;
     justify-content:flex-start;
-    height:100%;
-    padding:8px;
+    height:100vh;
+    padding:6px;
+    overflow:hidden;
+    box-sizing:border-box;
   }
   h1{
-    font-size:20px;
-    margin:4px 0;
+    font-size:18px;
+    margin:2px 0;
     letter-spacing:1px;
     color:var(--accent);
     text-shadow:0 0 8px rgba(233,69,96,.6);
+    flex-shrink:0;
   }
   #hud{
     display:flex;
-    gap:16px;
+    flex-direction:column;
     align-items:center;
-    margin-bottom:6px;
-    font-size:14px;
+    gap:4px;
+    margin-bottom:4px;
+    width:100%;
+    max-width:600px;
+    flex-shrink:0;
+  }
+  #hud-row1, #hud-row2{
+    display:flex;
     flex-wrap:wrap;
+    gap:5px;
+    align-items:center;
     justify-content:center;
+    width:100%;
   }
   #hud .item{
     background:rgba(255,255,255,.06);
-    padding:4px 10px;
+    padding:3px 8px;
     border-radius:8px;
     border:1px solid rgba(255,255,255,.1);
+    font-size:12px;
+    white-space:nowrap;
+  }
+  #canvasWrap{
+    position:relative;
+    border-radius:12px;
+    box-shadow:0 0 0 3px var(--panel), 0 8px 24px rgba(0,0,0,.5);
+    overflow:hidden;
+    background:#fdf6e3;
+    flex-shrink:1;
+    flex-grow:0;
   }
   #gravityIndicator{
     position:relative;
@@ -72,13 +95,6 @@
     transform-origin:center 60%;
     filter:drop-shadow(0 0 4px rgba(233,69,96,.9));
     transition:transform .12s linear;
-  }
-  #canvasWrap{
-    position:relative;
-    border-radius:12px;
-    box-shadow:0 0 0 3px var(--panel), 0 8px 24px rgba(0,0,0,.5);
-    overflow:hidden;
-    background:#fdf6e3;
   }
   canvas{display:block;touch-action:none;}
   #gameOverOverlay{
@@ -140,12 +156,13 @@
     color:#000 !important;
   }
   #help{
-    margin-top:8px;
-    font-size:12px;
+    margin-top:4px;
+    font-size:11px;
     color:#aaa;
     text-align:center;
-    line-height:1.6;
-    max-width:480px;
+    line-height:1.5;
+    max-width:560px;
+    flex-shrink:0;
   }
   #help b{color:var(--accent);}
   #help b.cheat-text{color:var(--cheat);}
@@ -159,19 +176,25 @@
 <div id="app">
   <h1>🍉 方向重力スイカゲーム 🍉</h1>
   <div id="hud">
-    <div class="item">スコア: <span id="score">0</span></div>
-    <div class="item">ベスト: <span id="best">0</span></div>
-    <div class="item nextPreview">次: <span id="nextCircle" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#ff6b6b;color:#fff;font-weight:bold;font-size:12px;vertical-align:middle;"></span></div>
-    <div class="item">重力強度: <span id="gravVal">1.0</span></div>
-    <div class="item">角度: <span id="gravAngleVal">90°</span></div>
-    <button id="shuffleBtn" style="padding:4px 12px;font-size:13px;">🔄 かき混ぜ (<span id="shuffleTimer">OK</span>)</button>
-    <button id="cheatBtn" class="cheat-mode-btn" style="padding:4px 12px;font-size:13px;">⚡ チート: OFF</button>
-    <div id="cheatNextWrap" style="display:none;align-items:center;gap:6px;background:rgba(255,215,0,.12);border:1px solid gold;border-radius:8px;padding:4px 10px;font-size:13px;">
-      次指定:
-      <select id="cheatNextSelect" style="background:#1a1a2e;color:#ffd700;border:1px solid gold;border-radius:4px;padding:2px 4px;font-size:13px;"></select>
+    <!-- 1行目: スコア・ステータス・重力インジケーター -->
+    <div id="hud-row1">
+      <div class="item">スコア: <span id="score">0</span></div>
+      <div class="item">ベスト: <span id="best">0</span></div>
+      <div class="item">次: <span id="nextCircle" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#ff6b6b;color:#fff;font-weight:bold;font-size:12px;vertical-align:middle;"></span></div>
+      <div class="item">強度: <span id="gravVal">800</span></div>
+      <div class="item">角度: <span id="gravAngleVal">90°</span></div>
+      <div id="gravityIndicator">
+        <div id="arrow"></div>
+      </div>
     </div>
-    <div id="gravityIndicator">
-      <div id="arrow"></div>
+    <!-- 2行目: ボタン群 -->
+    <div id="hud-row2">
+      <button id="shuffleBtn" style="padding:4px 10px;font-size:13px;">🔄 かき混ぜ (<span id="shuffleTimer">OK</span>)</button>
+      <button id="cheatBtn" class="cheat-mode-btn" style="padding:4px 10px;font-size:13px;">⚡ チート: OFF</button>
+      <div id="cheatNextWrap" style="display:none;align-items:center;gap:6px;background:rgba(255,215,0,.12);border:1px solid gold;border-radius:8px;padding:4px 8px;font-size:13px;">
+        次指定:
+        <select id="cheatNextSelect" style="background:#1a1a2e;color:#ffd700;border:1px solid gold;border-radius:4px;padding:2px 4px;font-size:12px;max-width:120px;"></select>
+      </div>
     </div>
   </div>
   <div id="canvasWrap">
@@ -203,7 +226,7 @@
     </div>
   </div>
 
-  <div style="display:flex;gap:10px;align-items:center;margin-top:6px;flex-wrap:wrap;justify-content:center;">
+  <div id="resetRow" style="display:flex;gap:10px;align-items:center;margin-top:4px;flex-wrap:wrap;justify-content:center;flex-shrink:0;">
     <button id="resetBestBtn" style="background:#555;padding:4px 12px;font-size:12px;">🗑️ 記録リセット</button>
   </div>
   <div id="help">
@@ -226,14 +249,24 @@ const LOGICAL_H = 640;
 let SCALE = 1;
 
 function resize(){
-  const hudH = document.getElementById('hud').getBoundingClientRect().height || 80;
-  const touchH = window.innerWidth <= 600 ? 100 : 0;
-  const maxW = Math.min(window.innerWidth - 16, 480);
-  const maxH = window.innerHeight - hudH - touchH - 60;
-  const scale = Math.min(maxW / LOGICAL_W, maxH / LOGICAL_H, 1.15);
-  SCALE = Math.max(scale, 0.38);
-  canvas.width  = LOGICAL_W * SCALE;
-  canvas.height = LOGICAL_H * SCALE;
+  // 一旦キャンバスを小さくしてから他要素の高さを測る
+  canvas.width = 1; canvas.height = 1;
+
+  const appPad = 12; // #appのpadding上下合計
+  const h1H    = document.querySelector('h1').getBoundingClientRect().height;
+  const hudH   = document.getElementById('hud').getBoundingClientRect().height;
+  const tcH    = document.getElementById('touchControls').getBoundingClientRect().height;
+  const helpH  = document.getElementById('help').getBoundingClientRect().height;
+  const rstH   = (document.getElementById('resetRow') || {getBoundingClientRect:()=>({height:32})}).getBoundingClientRect().height;
+  const gaps   = 6 * 4; // 各要素間のgap概算
+
+  const availH = window.innerHeight - appPad - h1H - hudH - tcH - helpH - rstH - gaps;
+  const availW = Math.min(window.innerWidth - 16, 480);
+
+  const scale = Math.min(availW / LOGICAL_W, availH / LOGICAL_H, 1.15);
+  SCALE = Math.max(scale, 0.35);
+  canvas.width  = Math.floor(LOGICAL_W * SCALE);
+  canvas.height = Math.floor(LOGICAL_H * SCALE);
 }
 window.addEventListener('resize', resize);
 resize();
